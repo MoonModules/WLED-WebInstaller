@@ -1,6 +1,6 @@
 {
   "name": "WLED",
-  "version": "0.16.0-alpha test",
+  "version": "16.0.0-alpha test",
   "home_assistant_domain": "wled",
   "new_install_prompt_erase": true,
   "builds": [
