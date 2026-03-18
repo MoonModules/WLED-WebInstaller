@@ -24,6 +24,22 @@
   const MAX_STABLE_RELEASES = 8;   // limit dropdown length
   const MAX_BETA_RELEASES = 2;    // only show the two most recent beta releases
 
+  // Experimental: group firmware entries that differ only in flash size / chip
+  // into a single dropdown entry with a multi-build manifest.  Requires
+  // esp-web-tools with flash-size-aware build selection (see PR #690).
+  // Set to true to test with a build of esp-web-tools that includes PR #690.
+  const USE_EXPERIMENTAL_FLASH_GROUPING = true;
+
+  // Named / branded board prefixes — these are unique hardware targets and
+  // should never be merged with generic ESP builds.
+  const NAMED_PREFIXES = [
+    'athom', 'wemos', 'abc_', 'adafruit', 'seeed', 'matrixportal'
+  ];
+
+  // First segment after the chip prefix that signals the start of the
+  // "config" portion of a board descriptor (flash size, features, etc.).
+  const CONFIG_START_RE = /^(\d|PSRAM|WROOM|compat)/i;
+
   // Base URL for locally-hosted bootloader / partition-table files.
   // These are chip-specific and shared across WLED versions.
   const bootBase = new URL('bin/boot/', window.location.href).href;
@@ -109,6 +125,225 @@
       .replace(/\bhub75\b/gi, 'HUB75')
       .replace(/\bopi\b/gi, 'OPI')
       .replace(/\bqspi\b/gi, 'QSPI');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Board-descriptor splitting & grouping (experimental flash-size grouping)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Split a board descriptor into (boardPrefix, configKey, chipFamily, isNamed).
+   *
+   * boardPrefix includes the chip sub-board identifier so that different
+   * hardware variants of the same chip stay separate:
+   *   "esp32c3dev"  vs "esp32c3mini_dio"
+   *   "esp8266"     vs "esp8266pro"
+   *   "esp32"       vs "esp32_pico"
+   *
+   * configKey is the flash-size + features portion:
+   *   "esp32_4MB_V4_M"        → prefix="esp32",     configKey="4MB_V4_M"
+   *   "esp32c3dev_2MB_M"      → prefix="esp32c3dev", configKey="2MB_M"
+   *   "esp32S3_8MB_PSRAM_M"   → prefix="esp32S3",    configKey="8MB_PSRAM_M"
+   *
+   * Named boards (athom, wemos, etc.) stay whole and are never grouped.
+   */
+  function splitBoard(board) {
+    var bl = board.toLowerCase();
+
+    // Named / branded boards: keep full name, never group
+    for (var i = 0; i < NAMED_PREFIXES.length; i++) {
+      if (bl.indexOf(NAMED_PREFIXES[i]) === 0) {
+        return { boardPrefix: board, configKey: board, chipFamily: inferChipFamily(board), isNamed: true };
+      }
+    }
+
+    // Split on underscores and find where the "config" part starts
+    var parts = board.split('_');
+    var configStart = parts.length; // default: nothing is config
+    for (var j = 1; j < parts.length; j++) { // skip first segment (always chip)
+      if (CONFIG_START_RE.test(parts[j])) {
+        configStart = j;
+        break;
+      }
+    }
+
+    if (configStart === 0 || configStart >= parts.length) {
+      // Can't split meaningfully — treat as named / unique
+      return { boardPrefix: board, configKey: board, chipFamily: inferChipFamily(board), isNamed: true };
+    }
+
+    var prefix = parts.slice(0, configStart).join('_');
+    var config = parts.slice(configStart).join('_');
+    return { boardPrefix: prefix, configKey: config, chipFamily: inferChipFamily(prefix), isNamed: false };
+  }
+
+  /**
+   * Strip the flash-size segment from a config key to produce a
+   * "flash-agnostic" grouping key.
+   *
+   * Examples:
+   *   "4MB_V4_M"       → "V4_M"
+   *   "16MB_V4_M"      → "V4_M"
+   *   "4MB_PSRAM_S"    → "PSRAM_S"
+   *   "PSRAM_M"        → "PSRAM_M"   (no flash size present)
+   *   "WROOM-2_M"      → "WROOM-2_M" (no flash size present)
+   *   "compat"         → "compat"
+   */
+  function stripFlashSize(configKey) {
+    return configKey.replace(/^\d+MB_/i, '');
+  }
+
+  /**
+   * Build a human-readable label for a grouped dropdown entry.
+   *
+   * @param {string}   faConfig      - the flash-agnostic config, e.g. "V4_M"
+   * @param {string[]} chipFamilies  - unique chip families in the group
+   * @param {string[]} flashSizes    - unique flash sizes in the group (may be empty)
+   * @returns {string} e.g. "V4 M (4MB/16MB) [ESP32, ESP32-S3]"
+   */
+  function buildGroupLabel(faConfig, chipFamilies, flashSizes) {
+    var base;
+
+    // Flash sizes
+    if (flashSizes.length > 1) {
+      flashSizes.sort(function (a, b) { return parseInt(a) - parseInt(b); });
+      base = humanizeBoardName(faConfig) + ' (' + flashSizes.join('/') + ')';
+    } else if (flashSizes.length === 1) {
+      base = humanizeBoardName(flashSizes[0] + '_' + faConfig);
+    } else {
+      base = humanizeBoardName(faConfig);
+    }
+
+    // Chip list
+    if (chipFamilies.length > 0) {
+      base += ' [' + chipFamilies.join(', ') + ']';
+    }
+
+    return base;
+  }
+
+  /**
+   * Group an array of board entries by flash-agnostic config key across ALL
+   * chip families, so that e.g. "esp32_4MB_M", "esp32s2_4MB_M", and
+   * "esp8266_4MB_M" become one dropdown entry "M (2MB/4MB/16MB) [ESP32-C3,
+   * ESP32-S2, ESP8266]".
+   *
+   * Collision handling: if two entries in a bucket share the SAME chipFamily
+   * AND the SAME flashSize (e.g. esp32c3dev_4MB_M and esp32c3mini_dio_4MB_M),
+   * those specific entries are split out as individual dropdown items because
+   * esp-web-tools cannot distinguish between them. The remaining non-colliding
+   * entries are still grouped.
+   *
+   * @param {Array} boardEntries - from extractBoards()
+   * @returns {Array} grouped entries, each with shape:
+   *   { label, builds: [{ chipFamily, board, downloadUrl }] }
+   */
+  function groupBoards(boardEntries) {
+    // Step 1: split each board and compute flash-agnostic config key
+    var parsed = boardEntries.map(function (entry) {
+      var split = splitBoard(entry.board);
+      var flashMatch = split.isNamed ? null : split.configKey.match(/^(\d+MB)/i);
+      return {
+        board: entry.board,
+        chipFamily: entry.chipFamily,
+        downloadUrl: entry.downloadUrl,
+        boardPrefix: split.boardPrefix,
+        configKey: split.configKey,
+        isNamed: split.isNamed,
+        faConfig: split.isNamed ? null : stripFlashSize(split.configKey),
+        // Group key: just the flash-agnostic config (cross-chip grouping)
+        groupKey: split.isNamed ? entry.board : stripFlashSize(split.configKey),
+        flashSize: flashMatch ? flashMatch[1] : null
+      };
+    });
+
+    // Step 2: bucket by groupKey (flash-agnostic config only)
+    var buckets = {};
+    var bucketOrder = [];
+    parsed.forEach(function (p) {
+      if (!buckets[p.groupKey]) {
+        buckets[p.groupKey] = [];
+        bucketOrder.push(p.groupKey);
+      }
+      buckets[p.groupKey].push(p);
+    });
+
+    // Step 3: for each bucket, detect (chipFamily, flashSize) collisions
+    // and split colliders out as individual entries
+    var result = [];
+    bucketOrder.forEach(function (key) {
+      var entries = buckets[key];
+      var label;
+
+      // Find collisions: same (chipFamily, flashSize) with different sub-boards
+      var slotMap = {};  // "chip|flash" -> [entries]
+      entries.forEach(function (e) {
+        var slot = e.chipFamily + '|' + (e.flashSize || '');
+        if (!slotMap[slot]) slotMap[slot] = [];
+        slotMap[slot].push(e);
+      });
+
+      var colliders = {};
+      Object.keys(slotMap).forEach(function (slot) {
+        if (slotMap[slot].length > 1) {
+          slotMap[slot].forEach(function (e) {
+            colliders[e.board] = true;
+          });
+        }
+      });
+
+      // Non-colliders get grouped; colliders become individual entries
+      var grouped = entries.filter(function (e) { return !colliders[e.board]; });
+      var individual = entries.filter(function (e) { return !!colliders[e.board]; });
+
+      if (grouped.length > 0) {
+        var chips = [];
+        var flashSizes = [];
+        var chipSeen = {};
+        var builds = grouped.map(function (e) {
+          if (!chipSeen[e.chipFamily]) {
+            chipSeen[e.chipFamily] = true;
+            chips.push(e.chipFamily);
+          }
+          if (e.flashSize && flashSizes.indexOf(e.flashSize) === -1) {
+            flashSizes.push(e.flashSize);
+          }
+          return {
+            chipFamily: e.chipFamily,
+            board: e.board,
+            downloadUrl: e.downloadUrl
+          };
+        });
+
+        if (grouped.length === 1) {
+          // Single entry — show prefix + config in label
+          var e = grouped[0];
+          if (e.isNamed) {
+            label = humanizeBoardName(e.board);
+          } else {
+            label = humanizeBoardName(e.boardPrefix) + ' ' + humanizeBoardName(e.configKey);
+          }
+        } else {
+          label = buildGroupLabel(grouped[0].faConfig, chips, flashSizes);
+        }
+        result.push({ label: label, builds: builds });
+      }
+
+      // Emit colliders individually
+      individual.forEach(function (e) {
+        label = humanizeBoardName(e.board) + ' [' + e.chipFamily + ']';
+        result.push({
+          label: label,
+          builds: [{
+            chipFamily: e.chipFamily,
+            board: e.board,
+            downloadUrl: e.downloadUrl
+          }]
+        });
+      });
+    });
+
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -199,28 +434,52 @@
   // ---------------------------------------------------------------------------
 
   /**
-   * Build an esp-web-tools manifest for a single board entry.
-   * Each manifest has exactly one build (one chipFamily).
+   * Build an esp-web-tools manifest for a board entry.
+   *
+   * Supports two shapes of boardEntry:
+   *
+   * 1. Single board (default mode):
+   *    { chipFamily, board, downloadUrl }
+   *    → manifest with one build
+   *
+   * 2. Grouped entry (experimental flash-size grouping):
+   *    { label, builds: [{ chipFamily, board, downloadUrl }, ...] }
+   *    → manifest with multiple builds (esp-web-tools selects by chip + flash)
    */
   function generateBoardManifest(version, boardEntry) {
-    var config = CHIP_CONFIG[boardEntry.chipFamily];
-    if (!config) return null;
+    // Detect grouped vs single entry
+    var buildSources = boardEntry.builds || [boardEntry];
+    var builds = [];
 
-    var parts = config.bootParts.map(function (bp) {
-      return { path: bp.path, offset: bp.offset };
-    });
+    for (var i = 0; i < buildSources.length; i++) {
+      var src = buildSources[i];
+      var config = CHIP_CONFIG[src.chipFamily];
+      if (!config) continue;
 
-    parts.push({
-      path: CORS_PROXY + boardEntry.downloadUrl,
-      offset: config.firmwareOffset
-    });
+      var parts = config.bootParts.map(function (bp) {
+        return { path: bp.path, offset: bp.offset };
+      });
+
+      parts.push({
+        path: CORS_PROXY + src.downloadUrl,
+        offset: config.firmwareOffset
+      });
+
+      builds.push({ chipFamily: config.chipFamily, parts: parts });
+    }
+
+    if (builds.length === 0) return null;
+
+    var displayName = boardEntry.label
+      ? boardEntry.label
+      : humanizeBoardName(boardEntry.board);
 
     return {
       name: 'WLED-MM',
-      version: version + ' (' + humanizeBoardName(boardEntry.board) + ')',
+      version: version + ' (' + displayName + ')',
       home_assistant_domain: 'wled',
       new_install_prompt_erase: true,
-      builds: [{ chipFamily: config.chipFamily, parts: parts }]
+      builds: builds
     };
   }
 
@@ -241,19 +500,38 @@
   }
 
   /**
-   * Create a single <option> element for a release.  The full board list is
+   * Create a single <option> element for a release.  The board list is
    * stored as a JSON string in data-boards so the board dropdown can be
    * populated when this version is selected.
+   *
+   * When USE_EXPERIMENTAL_FLASH_GROUPING is enabled, boards are grouped by
+   * flash-agnostic config key so that e.g. 4MB_M and 16MB_M become one
+   * dropdown entry with a multi-build manifest.
    */
   function createOption(release) {
     var boards = extractBoards(release);
     if (boards.length === 0) return null;
 
+    var entries;
+    if (USE_EXPERIMENTAL_FLASH_GROUPING) {
+      entries = groupBoards(boards);
+    } else {
+      // Default: each board is its own entry (single-build manifests)
+      entries = boards.map(function (b) {
+        return {
+          label: humanizeBoardName(b.board) + ' [' + b.chipFamily + ']',
+          builds: [{ chipFamily: b.chipFamily, board: b.board, downloadUrl: b.downloadUrl }]
+        };
+      });
+    }
+
+    if (entries.length === 0) return null;
+
     var opt = document.createElement('option');
     opt.textContent = getDisplayVersion(release);
     opt.dataset.dynamic = 'true';
     opt.dataset.version = getManifestVersion(release, 'normal');
-    opt.dataset.boards = JSON.stringify(boards);
+    opt.dataset.boards = JSON.stringify(entries);
     return opt;
   }
 

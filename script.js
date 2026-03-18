@@ -1,6 +1,12 @@
 /**
  * Populate the board dropdown based on the currently selected version.
  * The version <option> stores available boards in data-boards (JSON).
+ *
+ * Each entry has the shape:
+ *   { label: "4MB V4 M [ESP32]", builds: [{ chipFamily, board, downloadUrl }] }
+ *
+ * When experimental flash-size grouping is enabled, an entry may have multiple
+ * builds spanning different chip families (and flash sizes).
  */
 function populateBoardDropdown() {
     var verSel = document.getElementById('ver');
@@ -19,38 +25,20 @@ function populateBoardDropdown() {
         return;
     }
 
-    var boards;
+    var entries;
     try {
-        boards = JSON.parse(boardsJson);
+        entries = JSON.parse(boardsJson);
     } catch (e) {
         return;
     }
 
-    if (!boards || boards.length === 0) return;
+    if (!entries || entries.length === 0) return;
 
-    // Group boards by chip family for <optgroup>
-    var chipOrder = ['ESP32', 'ESP32-C3', 'ESP32-S2', 'ESP32-S3', 'ESP8266'];
-    var groups = {};
-    boards.forEach(function (b) {
-        if (!groups[b.chipFamily]) groups[b.chipFamily] = [];
-        groups[b.chipFamily].push(b);
-    });
-
-    var helpers = window._wledMM || {};
-    var humanize = helpers.humanizeBoardName || function(s) { return s; };
-
-    chipOrder.forEach(function (chip) {
-        if (!groups[chip] || groups[chip].length === 0) return;
-        var grp = document.createElement('optgroup');
-        grp.label = chip;
-        groups[chip].forEach(function (b) {
-            var o = document.createElement('option');
-            o.textContent = humanize(b.board);
-            o.value = JSON.stringify(b);
-            boardSel.appendChild(o);
-            grp.appendChild(o);
-        });
-        boardSel.appendChild(grp);
+    entries.forEach(function (entry) {
+        var o = document.createElement('option');
+        o.textContent = entry.label;
+        o.value = JSON.stringify(entry);
+        boardSel.appendChild(o);
     });
 
     // Auto-select the first board
