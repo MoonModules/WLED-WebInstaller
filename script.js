@@ -1,58 +1,100 @@
-function setManifest() {
-    var sel = document.getElementById('ver');
-    var opt = sel.options[sel.selectedIndex];
-    var m = opt.dataset.manifest;
-    var me = opt.dataset.ethernet;
-    var ma = opt.dataset.audio;
-    var mt = opt.dataset.test;
-    var mv4 = opt.dataset.v4;
-    var mdebug = opt.dataset.debug;
+/**
+ * Populate the board dropdown based on the currently selected version.
+ * The version <option> stores available boards in data-boards (JSON).
+ */
+function populateBoardDropdown() {
+    var verSel = document.getElementById('ver');
+    var boardSel = document.getElementById('board');
+    var opt = verSel.options[verSel.selectedIndex];
+    var boardsJson = opt && opt.dataset.boards;
 
-    //handle ethernet checkbox
-    m = handleCheckbox(m, me, 'ethernet');
-    //handle audioreactive checkbox
-    m = handleCheckbox(m, ma, 'audio');
-    //handle audioreactive checkbox
-    m = handleCheckbox(m, mt, 'test');
-    //handle v4 checkbox
-    m = handleCheckbox(m, mv4, 'v4');
-    //handle debug checkbox
-    m = handleCheckbox(m, mdebug, 'debug');
+    // Clear existing options
+    boardSel.innerHTML = '';
 
-    document.getElementById('inst').setAttribute('manifest', m);
-    document.getElementById('verstr').textContent = opt.text;
-}
-
-
-function handleCheckbox(manifest, checkboxmanifest, primaryCheckbox) {
-    //Check if specified manifest is available
-
-    if (!checkboxmanifest) {
-        document.getElementById(primaryCheckbox).disabled = true;
-        document.getElementById(primaryCheckbox + "_label").classList.remove("radio__label");
-        document.getElementById(primaryCheckbox + "_label").classList.add("disabled__label");
-    } else {
-        document.getElementById(primaryCheckbox + "_label").classList.remove("disabled__label");
-        document.getElementById(primaryCheckbox + "_label").classList.add("radio__label");
+    if (!boardsJson) {
+        // Fallback for static options that don't have data-boards
+        var fallbackOpt = document.createElement('option');
+        fallbackOpt.textContent = 'No boards available';
+        boardSel.appendChild(fallbackOpt);
+        return;
     }
 
-
-    if (checkboxmanifest && document.getElementById(primaryCheckbox).checked) {
-        manifest = checkboxmanifest;
+    var boards;
+    try {
+        boards = JSON.parse(boardsJson);
+    } catch (e) {
+        return;
     }
-    return manifest;
-}
 
+    if (!boards || boards.length === 0) return;
 
-function resetCheckboxes() {
-    const checkBoxIds = ['ethernet', 'audio', 'test', 'v4', 'debug'];
-    checkBoxIds.forEach(id => {
-        const checkbox = document.getElementById(id);
-        if (checkbox) {
-            checkbox.checked = false;
-            checkbox.disabled = false;
-        }
+    // Group boards by chip family for <optgroup>
+    var chipOrder = ['ESP32', 'ESP32-C3', 'ESP32-S2', 'ESP32-S3', 'ESP8266'];
+    var groups = {};
+    boards.forEach(function (b) {
+        if (!groups[b.chipFamily]) groups[b.chipFamily] = [];
+        groups[b.chipFamily].push(b);
     });
+
+    var helpers = window._wledMM || {};
+    var humanize = helpers.humanizeBoardName || function(s) { return s; };
+
+    chipOrder.forEach(function (chip) {
+        if (!groups[chip] || groups[chip].length === 0) return;
+        var grp = document.createElement('optgroup');
+        grp.label = chip;
+        groups[chip].forEach(function (b) {
+            var o = document.createElement('option');
+            o.textContent = humanize(b.board);
+            o.value = JSON.stringify(b);
+            boardSel.appendChild(o);
+            grp.appendChild(o);
+        });
+        boardSel.appendChild(grp);
+    });
+
+    // Auto-select the first board
+    boardSel.selectedIndex = 0;
+}
+
+/**
+ * Generate and set the manifest for the currently selected version + board.
+ */
+function updateManifest() {
+    var verSel = document.getElementById('ver');
+    var boardSel = document.getElementById('board');
+    var verOpt = verSel.options[verSel.selectedIndex];
+    var boardOpt = boardSel.options[boardSel.selectedIndex];
+
+    if (!verOpt || !boardOpt || !boardOpt.value) return;
+
+    var helpers = window._wledMM || {};
+    var version = verOpt.dataset.version || verOpt.textContent;
+
+    var boardEntry;
+    try {
+        boardEntry = JSON.parse(boardOpt.value);
+    } catch (e) {
+        return;
+    }
+
+    if (helpers.generateBoardManifest && helpers.createManifestUrl) {
+        var manifest = helpers.generateBoardManifest(version, boardEntry);
+        if (manifest) {
+            var url = helpers.createManifestUrl(manifest);
+            document.getElementById('inst').setAttribute('manifest', url);
+        }
+    }
+
+    document.getElementById('verstr').textContent = verOpt.textContent;
+}
+
+/**
+ * Called when the version dropdown changes.
+ */
+function setManifest() {
+    populateBoardDropdown();
+    updateManifest();
 }
 
 

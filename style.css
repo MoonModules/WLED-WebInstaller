@@ -65,6 +65,12 @@ option {
     border-radius: 25px;
 }
 
+#board {
+    width: 350px;
+    font-size: 16px;
+    background-position: 326px 17px;
+}
+
 img {
     width: 770px;
     max-width: 80%;

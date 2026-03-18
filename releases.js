@@ -1,9 +1,11 @@
-// releases.js - Dynamic release loading from GitHub API for WLED Web Installer
+// releases.js - Dynamic release loading from GitHub API for WLED-MM Web Installer
 //
-// Fetches available WLED releases from the GitHub Releases API and dynamically
-// populates the version dropdown. Generates esp-web-tools manifests on-the-fly
-// as blob URLs, so the existing setManifest()/handleCheckbox() logic in script.js
-// works unchanged.
+// Fetches available WLED-MM releases from the GitHub Releases API and dynamically
+// populates the version dropdown. Each release's firmware assets are parsed to
+// extract board descriptors (e.g. "esp32_4MB_V4_M"), which are stored as JSON
+// on the <option> element. When a version is selected, script.js populates a
+// second "board" dropdown and generates an esp-web-tools manifest on-the-fly
+// as a blob URL for the selected board.
 //
 // Falls back to the static <option> elements already in index.htm if the API
 // request fails (e.g. rate-limited, offline, network error).
@@ -71,65 +73,101 @@
   };
 
   // ---------------------------------------------------------------------------
-  // Variant definitions
+  // Board descriptor → chip family inference
   // ---------------------------------------------------------------------------
-  // Each variant maps chip families to the asset-name suffix used in GitHub
-  // release assets.  Only chips that have a matching asset will be included in
-  // the generated manifest; missing assets cause the variant's radio button to
-  // be disabled automatically (existing handleCheckbox logic).
+  // WLED-MM assets encode board, flash size, PSRAM, and build variant all in
+  // one descriptor string. We infer the ESP chip family from the descriptor so
+  // the correct bootloader parts are included in the manifest.
 
-  const VARIANTS = {
-    normal: {
-      'ESP32':    '_ESP32.bin',
-      'ESP32-C3': '_ESP32-C3.bin',
-      'ESP32-S2': '_ESP32-S2.bin',
-      'ESP32-S3': '_ESP32-S3_8MB_opi.bin',
-      'ESP8266':  '_ESP8266.bin'
-    },
-    ethernet: {
-      'ESP32':   '_ESP32_Ethernet.bin',
-      'ESP8266': '_ESP8266.bin'
-    },
-    audio: {
-      'ESP32': '_ESP32_audioreactive.bin'
-    },
-    test: {
-      'ESP8266': '_ESP8266_160.bin'
-    },
-    v4: {
-      'ESP32': '_ESP32_V4.bin'
-    },
-    debug: {
-      'ESP32': '_ESP32_DEBUG.bin'
-    }
-  };
+  /** Infer the esp-web-tools chipFamily from a WLED-MM board descriptor. */
+  function inferChipFamily(board) {
+    var b = board.toLowerCase();
+    if (/esp32s3|esp32_s3|matrixportal/.test(b)) return 'ESP32-S3';
+    if (/esp32s2|esp32_s2/.test(b))              return 'ESP32-S2';
+    if (/esp32c3/.test(b))                       return 'ESP32-C3';
+    if (/esp8266|esp01/.test(b))                  return 'ESP8266';
+    // Everything else (including boards like athom_music_esp32, wemos_shield_esp32, abc_wled_controller)
+    return 'ESP32';
+  }
 
-  // Maps variant names to the data-* attribute names expected by script.js
-  const VARIANT_DATA_ATTRS = {
-    normal:   'manifest',
-    ethernet: 'ethernet',
-    audio:    'audio',
-    test:     'test',
-    v4:       'v4',
-    debug:    'debug'
-  };
+  /**
+   * Turn a board descriptor into a user-friendly display name.
+   * e.g. "esp32_4MB_V4_M" → "ESP32 4MB V4 M"
+   *      "athom_music_esp32_4MB_M" → "Athom Music ESP32 4MB M"
+   */
+  function humanizeBoardName(board) {
+    return board
+      .replace(/_/g, ' ')
+      .replace(/\besp32s3\b/gi, 'ESP32-S3')
+      .replace(/\besp32s2\b/gi, 'ESP32-S2')
+      .replace(/\besp32c3\b/gi, 'ESP32-C3')
+      .replace(/\besp8266\b/gi, 'ESP8266')
+      .replace(/\besp32\b/gi, 'ESP32')
+      .replace(/\besp01\b/gi, 'ESP-01')
+      .replace(/\b(\d+)mb\b/gi, function(_, n) { return n + 'MB'; })
+      .replace(/\bpsram\b/gi, 'PSRAM')
+      .replace(/\bhub75\b/gi, 'HUB75')
+      .replace(/\bopi\b/gi, 'OPI')
+      .replace(/\bqspi\b/gi, 'QSPI');
+  }
 
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
-  /** Find a release asset whose name ends with `suffix` (ignore .gz files). */
-  function findAsset(assets, suffix) {
-    return assets.find(function (a) {
-      return a.name.endsWith(suffix) && !a.name.endsWith('.gz');
-    }) || null;
+  /**
+   * Extract board descriptors from a release's asset list.
+   * Returns an array of { board, chipFamily, downloadUrl } objects.
+   *
+   * Naming patterns:
+   *   Release: WLEDMM_<version>_<board>.bin
+   *   Nightly: firmware-<board>.bin
+   */
+  function extractBoards(release) {
+    var isNightly = (release.tag_name === 'nightly');
+    var boards = [];
+    var seen = {};
+
+    release.assets.forEach(function (asset) {
+      if (asset.name.endsWith('.gz')) return;
+      var m;
+      if (isNightly) {
+        m = asset.name.match(/^firmware-(.+)\.bin$/);
+      } else {
+        m = asset.name.match(/^WLEDMM_.+?_(.+)\.bin$/);
+      }
+      if (!m) return;
+
+      var board = m[1];
+      if (seen[board]) return;
+      seen[board] = true;
+
+      boards.push({
+        board: board,
+        chipFamily: inferChipFamily(board),
+        downloadUrl: asset.browser_download_url
+      });
+    });
+
+    // Sort: by chip family first, then alphabetically by board name
+    var chipOrder = { 'ESP32': 0, 'ESP32-C3': 1, 'ESP32-S2': 2, 'ESP32-S3': 3, 'ESP8266': 4 };
+    boards.sort(function (a, b) {
+      var ca = chipOrder[a.chipFamily] || 99;
+      var cb = chipOrder[b.chipFamily] || 99;
+      if (ca !== cb) return ca - cb;
+      return a.board.localeCompare(b.board);
+    });
+
+    return boards;
   }
 
   /** Extract the WLED version string from asset filenames (for nightly). */
   function extractVersionFromAssets(assets) {
-    for (let i = 0; i < assets.length; i++) {
-      const m = assets[i].name.match(/^WLEDMM_(.+?)_(ESP\d|ESP8)/);
+    for (var i = 0; i < assets.length; i++) {
+      // Try release naming first
+      var m = assets[i].name.match(/^WLEDMM_(.+?)_/);
       if (m) return m[1];
+      // Try nightly naming — version is in the tag, not the filename
     }
     return 'unknown';
   }
@@ -161,42 +199,28 @@
   // ---------------------------------------------------------------------------
 
   /**
-   * Build an esp-web-tools manifest object for the given release + variant.
-   * Returns null if no matching assets are found for this variant.
+   * Build an esp-web-tools manifest for a single board entry.
+   * Each manifest has exactly one build (one chipFamily).
    */
-  function generateManifest(release, variantName) {
-    const chipSuffixes = VARIANTS[variantName];
-    const version = getManifestVersion(release, variantName);
-    const builds = [];
+  function generateBoardManifest(version, boardEntry) {
+    var config = CHIP_CONFIG[boardEntry.chipFamily];
+    if (!config) return null;
 
-    for (const chip in chipSuffixes) {
-      const suffix = chipSuffixes[chip];
-      const asset = findAsset(release.assets, suffix);
-      if (!asset) continue;
+    var parts = config.bootParts.map(function (bp) {
+      return { path: bp.path, offset: bp.offset };
+    });
 
-      const config = CHIP_CONFIG[chip];
-      if (!config) continue;
-
-      const parts = config.bootParts.map(function (bp) {
-        return { path: bp.path, offset: bp.offset };
-      });
-
-      parts.push({
-        path: CORS_PROXY + asset.browser_download_url,
-        offset: config.firmwareOffset
-      });
-
-      builds.push({ chipFamily: config.chipFamily, parts: parts });
-    }
-
-    if (builds.length === 0) return null;
+    parts.push({
+      path: CORS_PROXY + boardEntry.downloadUrl,
+      offset: config.firmwareOffset
+    });
 
     return {
       name: 'WLED-MM',
-      version: version,
+      version: version + ' (' + humanizeBoardName(boardEntry.board) + ')',
       home_assistant_domain: 'wled',
       new_install_prompt_erase: true,
-      builds: builds
+      builds: [{ chipFamily: config.chipFamily, parts: parts }]
     };
   }
 
@@ -217,26 +241,20 @@
   }
 
   /**
-   * Create a single <option> element for a release.  All variant manifests are
-   * pre-generated as blob URLs and stored in data-* attributes so that the
-   * existing setManifest() / handleCheckbox() code works without changes.
+   * Create a single <option> element for a release.  The full board list is
+   * stored as a JSON string in data-boards so the board dropdown can be
+   * populated when this version is selected.
    */
   function createOption(release) {
-    const opt = document.createElement('option');
+    var boards = extractBoards(release);
+    if (boards.length === 0) return null;
+
+    var opt = document.createElement('option');
     opt.textContent = getDisplayVersion(release);
-    opt.dataset.dynamic = 'true'; // mark as dynamically generated
-
-    let hasPlain = false;
-    for (const variant in VARIANT_DATA_ATTRS) {
-      const manifest = generateManifest(release, variant);
-      if (manifest) {
-        opt.dataset[VARIANT_DATA_ATTRS[variant]] = createManifestUrl(manifest);
-        if (variant === 'normal') hasPlain = true;
-      }
-    }
-
-    // Every release must at least have the plain/normal variant
-    return hasPlain ? opt : null;
+    opt.dataset.dynamic = 'true';
+    opt.dataset.version = getManifestVersion(release, 'normal');
+    opt.dataset.boards = JSON.stringify(boards);
+    return opt;
   }
 
   /** Replace the <select> contents with dynamically generated options. */
@@ -331,14 +349,21 @@
   // ---------------------------------------------------------------------------
 
   /**
-   * Safely call resetCheckboxes() and setManifest() from script.js.
+   * Safely call populateBoardDropdown() and updateManifest() from script.js.
    * These are defined in script.js which loads before releases.js, but we add
    * defensive checks for robustness.
    */
   function applySelection() {
-    if (typeof resetCheckboxes === 'function') resetCheckboxes();
-    if (typeof setManifest === 'function') setManifest();
+    if (typeof populateBoardDropdown === 'function') populateBoardDropdown();
+    if (typeof updateManifest === 'function') updateManifest();
   }
+
+  // Expose manifest helpers so script.js can generate manifests on board change
+  window._wledMM = {
+    generateBoardManifest: generateBoardManifest,
+    createManifestUrl: createManifestUrl,
+    humanizeBoardName: humanizeBoardName
+  };
 
   /**
    * Fetch releases and populate the dropdown.  On failure the existing static

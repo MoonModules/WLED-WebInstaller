@@ -75,67 +75,16 @@
       <br><br>
 
       <!-- add new builds here -->
-      <select id="ver" class="btn" onchange="resetCheckboxes();setManifest();">
-
-        
+      <select id="ver" class="btn" onchange="setManifest();">
         <optgroup label="Release">
-          <option data-manifest="bin/Release/release_0_15_3/manifest.json"
-            data-ethernet="bin/Release/release_0_15_3/manifest_e.json"
-            data-test = "bin/Release/release_0_15_3/manifest_t.json"
-            data-v4 = "bin/Release/release_0_15_3/manifest_v4.json"
-            >0.15.3</option>
-          <option data-manifest="bin/Release/release_0_15_1/manifest.json"
-            data-ethernet="bin/Release/release_0_15_1/manifest_e.json"
-            data-test = "bin/Release/release_0_15_1/manifest_t.json"
-            data-v4 = "bin/Release/release_0_15_1/manifest_v4.json"
-            >0.15.1</option>
-          <option data-manifest="bin/Release/release_0_15_0/manifest.json"
-            data-ethernet="bin/Release/release_0_15_0/manifest_e.json"
-            data-test = "bin/Release/release_0_15_0/manifest_t.json"
-            >0.15.0</option>
-          <option data-manifest="bin/Release/release_0_14_4/manifest.json"
-            data-ethernet="bin/Release/release_0_14_4/manifest_e.json"
-            data-audio = "bin/Release/release_0_14_4/manifest_a.json"
-            data-test = "bin/Release/release_0_14_4/manifest_t.json"
-            >0.14.4</option>
-          <option data-manifest="bin/Release/release_0_14_3/manifest.json"
-            data-ethernet="bin/Release/release_0_14_3/manifest_e.json"
-            data-audio = "bin/Release/release_0_14_3/manifest_a.json"
-            data-test = "bin/Release/release_0_14_3/manifest_t.json"
-            >0.14.3</option>
-        </optgroup>
-        <!--         
-	      <optgroup label="Beta">
-            <option data-manifest="bin/Beta/beta_0_15_2-b1/manifest.json"
-            data-ethernet="bin/Beta/beta_0_15_2-b1/manifest_e.json"
-            data-test = "bin/Beta/beta_0_15_2-b1/manifest_t.json"
-            data-v4 = "bin/Beta/beta_0_15_2-b1/manifest_v4.json"
-            >0.15.2-beta1</option>
-        </optgroup>
-        -->
-        <optgroup label="Nightly">
-          <option data-manifest="bin/nightly/manifest.json"
-            data-ethernet="bin/nightly/manifest_e.json"
-            data-test = "bin/nightly/manifest_t.json"
-            data-debug = "bin/nightly/manifest_debug.json"
-            >16.0.0 Nightly </option>
+          <option>Loading releases...</option>
         </optgroup>
       </select><br>
 
-      <div class="radio" onchange="setManifest()">
-        <input class="radio__input" type="radio" value="normal" name="version" id="normal" checked>
-        <label class="radio__label" for="normal" id="normal_label" data-i18n="plain">Plain</label>
-        <input class="radio__input" type="radio" value="audio" name="version" id="audio">
-        <label class="radio__label" for="audio" id="audio_label" data-i18n="audioReactive">Audioreactive</label>
-        <input class="radio__input" type="radio" value="ethernet" name="version" id="ethernet">
-        <label class="radio__label" for="ethernet" id="ethernet_label" data-i18n="ethernet">Ethernet</label>
-        <input class="radio__input" type="radio" value="test" name="version" id="test">
-        <label class="radio__label" for="test" id="test_label" data-i18n="esp8266Test">ESP8266 CPU Frequency Test</label>
-        <input class="radio__input" type="radio" value="v4" name="version" id="v4">
-        <label class="radio__label" for="v4" id="v4_label" data-i18n="esp32V4">ESP32 V4</label>
-        <input class="radio__input" type="radio" value="debug" name="version" id="debug">
-        <label class="radio__label" for="debug" id="debug_label" data-i18n="debug">DEBUG</label>
-      </div>
+      <label for="board" style="color:#aaa; font-size:14px;" data-i18n="boardLabel">Board / Firmware:</label><br>
+      <select id="board" class="btn" onchange="updateManifest();">
+        <option>Select a version first</option>
+      </select>
       <br>
 
       <div class="container inst-button">
