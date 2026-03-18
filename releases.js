@@ -15,7 +15,7 @@
   // Configuration
   // ---------------------------------------------------------------------------
 
-  const GITHUB_RELEASES_URL = 'https://api.github.com/repos/wled/WLED/releases';
+  const GITHUB_RELEASES_URL = 'https://api.github.com/repos/MoonModules/WLED-MM/releases';
   const CORS_PROXY = 'https://proxy.corsfix.com/?';
   const CACHE_KEY = 'wled_releases_cache';
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -128,7 +128,7 @@
   /** Extract the WLED version string from asset filenames (for nightly). */
   function extractVersionFromAssets(assets) {
     for (let i = 0; i < assets.length; i++) {
-      const m = assets[i].name.match(/^WLED_(.+?)_(ESP\d|ESP8)/);
+      const m = assets[i].name.match(/^WLEDMM_(.+?)_(ESP\d|ESP8)/);
       if (m) return m[1];
     }
     return 'unknown';
@@ -192,7 +192,7 @@
     if (builds.length === 0) return null;
 
     return {
-      name: 'WLED',
+      name: 'WLED-MM',
       version: version,
       home_assistant_domain: 'wled',
       new_install_prompt_erase: true,
