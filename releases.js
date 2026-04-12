@@ -18,7 +18,7 @@
   // ---------------------------------------------------------------------------
 
   const GITHUB_RELEASES_URL = 'https://api.github.com/repos/MoonModules/WLED-MM/releases';
-  const CORS_PROXY = 'https://proxy.corsfix.com/?';
+  const DOWNLOAD_HOST = 'https://download.wled.me';
   const CACHE_KEY = 'wled_releases_cache';
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   const MAX_STABLE_RELEASES = 8;   // limit dropdown length
@@ -461,7 +461,7 @@
       });
 
       parts.push({
-        path: CORS_PROXY + src.downloadUrl,
+        path: src.downloadUrl.replace('https://github.com', DOWNLOAD_HOST),
         offset: config.firmwareOffset
       });
 
