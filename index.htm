@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#222222">
   <link rel="shortcut icon" href="favicon.png">
   <link rel="stylesheet" href="style.css">
-  <title>Install WLED</title>
+  <title>Install WLED-MM</title>
   <script
     type="module"
     src="https://unpkg.com/esp-web-tools@10.1.0/dist/web/install-button.js?module"
@@ -21,7 +21,7 @@
   <div id="overlay">
     <div id="text">
       <h1 data-i18n="maintenance1">Web Installer under maintenance</h1><br>
-      <span data-i18n="maintenance2">The WLED web installer is currently out of service due to maintenance work and will be back online shortly.</span><br><br>
+      <span data-i18n="maintenance2">The WLED-MM web installer is currently out of service due to maintenance work and will be back online shortly.</span><br><br>
       <span data-i18n="maintenance3">In the meantime, you can use the webinstaller provided by Wladi: </span>
       <a href="https://wled-install.github.io/">https://wled-install.github.io/</a>
     </div>
@@ -41,12 +41,12 @@
   
   <div class="main">
 
-    <h2 data-i18n="welcome">Welcome to the WLED web installer!</h2>
+    <h2 data-i18n="welcome">Welcome to the WLED-MM web installer!</h2>
     <div id="unsupported" hidden>
       <span data-i18n="unsupported1">Sorry, your browser is not yet supported!</span><br>
       <span data-i18n="unsupported2">Please try on Desktop Chrome or Edge.</span><br>
       <span data-i18n="unsupported3">Find binary files here:</span><br>
-      <a href="https://github.com/Aircoookie/WLED/releases" target="_blank">
+      <a href="https://github.com/MoonModules/WLED-MM/releases" target="_blank">
         <button class="btn" slot="activate">GitHub Releases</button>
       </a>
     </div>
@@ -54,7 +54,7 @@
     <div id="flasher">
       <ol>
         <li>
-          <span data-i18n="step1-1">Plug in your ESP to a USB port. We will install WLED </span>
+          <span data-i18n="step1-1">Plug in your ESP to a USB port. We will install WLED-MM </span>
           <span id="verstr">0.12.0</span>
           <span data-i18n="step1-2"> to it.</span>
         </li>
@@ -70,7 +70,7 @@
           </p>
         </li>
 
-        <li data-i18n="step3">Get WLED installed and connected in less than 3 minutes!</li>
+        <li data-i18n="step3">Get WLED-MM installed and connected in less than 3 minutes!</li>
       </ol>
       <br><br>
 
@@ -79,46 +79,9 @@
 
         
         <optgroup label="Release">
-          <option data-manifest="bin/Release/release_0_15_3/manifest.json"
-            data-ethernet="bin/Release/release_0_15_3/manifest_e.json"
-            data-test = "bin/Release/release_0_15_3/manifest_t.json"
-            data-v4 = "bin/Release/release_0_15_3/manifest_v4.json"
-            >0.15.3</option>
-          <option data-manifest="bin/Release/release_0_15_1/manifest.json"
-            data-ethernet="bin/Release/release_0_15_1/manifest_e.json"
-            data-test = "bin/Release/release_0_15_1/manifest_t.json"
-            data-v4 = "bin/Release/release_0_15_1/manifest_v4.json"
-            >0.15.1</option>
-          <option data-manifest="bin/Release/release_0_15_0/manifest.json"
-            data-ethernet="bin/Release/release_0_15_0/manifest_e.json"
-            data-test = "bin/Release/release_0_15_0/manifest_t.json"
-            >0.15.0</option>
-          <option data-manifest="bin/Release/release_0_14_4/manifest.json"
-            data-ethernet="bin/Release/release_0_14_4/manifest_e.json"
-            data-audio = "bin/Release/release_0_14_4/manifest_a.json"
-            data-test = "bin/Release/release_0_14_4/manifest_t.json"
-            >0.14.4</option>
-          <option data-manifest="bin/Release/release_0_14_3/manifest.json"
-            data-ethernet="bin/Release/release_0_14_3/manifest_e.json"
-            data-audio = "bin/Release/release_0_14_3/manifest_a.json"
-            data-test = "bin/Release/release_0_14_3/manifest_t.json"
-            >0.14.3</option>
         </optgroup>
-        <!--         
-	      <optgroup label="Beta">
-            <option data-manifest="bin/Beta/beta_0_15_2-b1/manifest.json"
-            data-ethernet="bin/Beta/beta_0_15_2-b1/manifest_e.json"
-            data-test = "bin/Beta/beta_0_15_2-b1/manifest_t.json"
-            data-v4 = "bin/Beta/beta_0_15_2-b1/manifest_v4.json"
-            >0.15.2-beta1</option>
         </optgroup>
-        -->
         <optgroup label="Nightly">
-          <option data-manifest="bin/nightly/manifest.json"
-            data-ethernet="bin/nightly/manifest_e.json"
-            data-test = "bin/nightly/manifest_t.json"
-            data-debug = "bin/nightly/manifest_debug.json"
-            >16.0.0 Nightly </option>
         </optgroup>
       </select><br>
 
@@ -153,7 +116,7 @@
       <a href="https://corsfix.com" target="_blank">Corsfix</a>
       <span data-i18n="cors2"></span><br>
 
-      <br><a href="https://github.com/Aircoookie/WLED" target="_blank">GitHub</a>&emsp;<a href="https://kno.wled.ge"target="_blank">kno.wled.ge</a>
+      <br><a href="https://github.com/MoonModules/WLED-MM" target="_blank">GitHub</a>&emsp;<a href="https://mm.kno.wled.ge"target="_blank">mm.kno.wled.ge</a>
 
       <script src="script.js"></script>
       <script src="i18n.js"></script>
