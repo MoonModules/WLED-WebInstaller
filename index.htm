@@ -15,13 +15,13 @@
   <script src="enable-threads.js"></script>
 </head>
 
-<body onload="checkSupported();i18nInit()">
+<body onload="checkSupported();i18nInit();loadReleases()">
 
   <!-- Overlay for maintenance -->
   <div id="overlay">
     <div id="text">
       <h1 data-i18n="maintenance1">Web Installer under maintenance</h1><br>
-      <span data-i18n="maintenance2">The WLED-MM web installer is currently out of service due to maintenance work and will be back online shortly.</span><br><br>
+      <span data-i18n="maintenance2">The MoonModules WLED-MM web installer is currently out of service due to maintenance work and will be back online shortly.</span><br><br>
       <span data-i18n="maintenance3">In the meantime, you can use the webinstaller provided by Wladi: </span>
       <a href="https://wled-install.github.io/">https://wled-install.github.io/</a>
     </div>
@@ -41,7 +41,7 @@
   
   <div class="main">
 
-    <h2 data-i18n="welcome">Welcome to the WLED-MM web installer!</h2>
+    <h2 data-i18n="welcome">Welcome to the MoonModules WLED-MM web installer!</h2>
     <div id="unsupported" hidden>
       <span data-i18n="unsupported1">Sorry, your browser is not yet supported!</span><br>
       <span data-i18n="unsupported2">Please try on Desktop Chrome or Edge.</span><br>
@@ -75,30 +75,16 @@
       <br><br>
 
       <!-- add new builds here -->
-      <select id="ver" class="btn" onchange="resetCheckboxes();setManifest();">
-
-        
+      <select id="ver" class="btn" onchange="setManifest();">
         <optgroup label="Release">
-        </optgroup>
-        </optgroup>
-        <optgroup label="Nightly">
+          <option>Loading releases...</option>
         </optgroup>
       </select><br>
 
-      <div class="radio" onchange="setManifest()">
-        <input class="radio__input" type="radio" value="normal" name="version" id="normal" checked>
-        <label class="radio__label" for="normal" id="normal_label" data-i18n="plain">Plain</label>
-        <input class="radio__input" type="radio" value="audio" name="version" id="audio">
-        <label class="radio__label" for="audio" id="audio_label" data-i18n="audioReactive">Audioreactive</label>
-        <input class="radio__input" type="radio" value="ethernet" name="version" id="ethernet">
-        <label class="radio__label" for="ethernet" id="ethernet_label" data-i18n="ethernet">Ethernet</label>
-        <input class="radio__input" type="radio" value="test" name="version" id="test">
-        <label class="radio__label" for="test" id="test_label" data-i18n="esp8266Test">ESP8266 CPU Frequency Test</label>
-        <input class="radio__input" type="radio" value="v4" name="version" id="v4">
-        <label class="radio__label" for="v4" id="v4_label" data-i18n="esp32V4">ESP32 V4</label>
-        <input class="radio__input" type="radio" value="debug" name="version" id="debug">
-        <label class="radio__label" for="debug" id="debug_label" data-i18n="debug">DEBUG</label>
-      </div>
+      <label for="board" style="color:#aaa; font-size:14px;" data-i18n="boardLabel">Board / Firmware:</label><br>
+      <select id="board" class="btn" onchange="updateManifest();">
+        <option>Select a version first</option>
+      </select>
       <br>
 
       <div class="container inst-button">
@@ -112,13 +98,10 @@
       <a href="https://esphome.github.io/esp-web-tools/" target="_blank">ESP Web Tools</a>
       <span data-i18n="powered2"></span><br>
 
-      <span data-i18n="cors1">CORS proxy by </span>
-      <a href="https://corsfix.com" target="_blank">Corsfix</a>
-      <span data-i18n="cors2"></span><br>
-
       <br><a href="https://github.com/MoonModules/WLED-MM" target="_blank">GitHub</a>&emsp;<a href="https://mm.kno.wled.ge"target="_blank">mm.kno.wled.ge</a>
 
       <script src="script.js"></script>
+      <script src="releases.js"></script>
       <script src="i18n.js"></script>
 </body>
 

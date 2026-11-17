@@ -40,6 +40,8 @@ normalize_url() {
   local u="$1"
   # Proxy-Prefix entfernen
   u="${u#https://proxy.corsfix.com/?}"
+  # download.wled.me → github.com zurück
+  u="${u/https:\/\/download.wled.me/https://github.com}"
   echo "$u"
 }
 
